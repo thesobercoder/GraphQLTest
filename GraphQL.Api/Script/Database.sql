@@ -18,7 +18,7 @@ GO
 CREATE TABLE Orders
 (
 	OrderID	   int			 NOT NULL IDENTITY (1, 1) PRIMARY KEY,
-	OrderDate  nvarchar(200),
+	OrderDate  datetime,
 	Comments   nvarchar(max) NULL,
 	CustomerID int			 NOT NULL REFERENCES Customers (CustomerID)
 )
