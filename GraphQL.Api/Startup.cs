@@ -9,7 +9,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System.Collections.Generic;
 
 namespace GraphQL.Api
 {
@@ -39,11 +38,11 @@ namespace GraphQL.Api
                 {
                     Path = "/ui/playground",
                     GraphQLEndPoint = "/graphql",
-                    PlaygroundSettings = new Dictionary<string, object>
+                    /*PlaygroundSettings = new Dictionary<string, object>
                     {
                         ["editor.theme"] = "dark",
                         ["tracing.hideTracingResponse"] = false
-                    }
+                    }*/
                 });
             }
             app.UseHttpsRedirection();
@@ -51,6 +50,7 @@ namespace GraphQL.Api
 
         private void RegisterGraphQL(IServiceCollection services)
         {
+            services.AddSingleton<IDependencyResolver>(provider => new FuncDependencyResolver(provider.GetRequiredService));
             GraphTypeTypeRegistry.Register<Customer, CustomerGraph>();
             GraphTypeTypeRegistry.Register<Order, OrderGraph>();
             services.AddDbContext<TestDBContext>(options => options.UseSqlServer(_Configuration.GetConnectionString("LeaseWebDB")));
@@ -60,14 +60,13 @@ namespace GraphQL.Api
             ); ;
             EfGraphQLConventions.RegisterConnectionTypesInContainer(services);
             services.AddSingleton<IDocumentExecuter, EfDocumentExecuter>();
-            services.AddScoped<CustomerGraph>();
-            services.AddScoped<OrderGraph>();
-            services.AddScoped<QueryTest>();
-            services.AddScoped<SchemaTest>();
+            services.AddTransient<QueryTest>();
+            services.AddTransient<SchemaTest>();
             services.AddGraphQL(o =>
             {
+                o.EnableMetrics = true;
                 o.ExposeExceptions = true;
-            });
+            }).AddGraphTypes(ServiceLifetime.Transient);
         }
     }
 }

@@ -2,11 +2,8 @@
 using GraphQL.Types;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace GraphQL.Api
 {
@@ -22,7 +19,7 @@ namespace GraphQL.Api
         public int OrderID { get; set; }
         public DateTime OrderDate { get; set; }
         public int CustomerID { get; set; }
-        public ICollection<Customer> Customers { get; set; }
+        public Customer Customer { get; set; }
     }
 
     public class CustomerGraph : EfObjectGraphType<TestDBContext, Customer>
@@ -45,9 +42,9 @@ namespace GraphQL.Api
         {
             Field(x => x.OrderID);
             Field(x => x.OrderDate);
-            AddNavigationListField(
-                name: "customers",
-                resolve: context => context.Source.Customers);
+            AddNavigationField(
+                name: "customer",
+                resolve: context => context.Source.Customer);
         }
     }
 
@@ -68,8 +65,7 @@ namespace GraphQL.Api
                 builder.Entity<Order>().ToTable("Orders");
                 builder.Entity<Order>().HasKey(x => x.OrderID);
 
-                builder.Entity<Order>().HasMany(x => x.Customers);
-                builder.Entity<Customer>().HasMany(x => x.Orders);
+                builder.Entity<Customer>().HasMany(x => x.Orders).WithOne(x => x.Customer);
             }
         }
 
@@ -86,9 +82,9 @@ namespace GraphQL.Api
 
     public class SchemaTest : Schema
     {
-        public SchemaTest(IServiceProvider resolver) : base(resolver)
+        public SchemaTest(IDependencyResolver resolver) : base(resolver)
         {
-            Query = resolver.GetService<QueryTest>();
+            Query = resolver.Resolve<QueryTest>();
         }
     }
 
