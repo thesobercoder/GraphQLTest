@@ -1,9 +1,12 @@
 ﻿using GraphQL.EntityFramework;
+using GraphQL.Language.AST;
 using GraphQL.Types;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Dynamic.Core;
 
 namespace GraphQL.Api
 {
@@ -27,6 +30,7 @@ namespace GraphQL.Api
         public CustomerGraph(IEfGraphQLService<TestDBContext> graphQlService) :
             base(graphQlService)
         {
+            Name = "Customers";
             Field(x => x.CustomerID);
             Field(x => x.CustomerName);
             AddNavigationListField(
@@ -40,8 +44,10 @@ namespace GraphQL.Api
         public OrderGraph(IEfGraphQLService<TestDBContext> graphQlService) :
             base(graphQlService)
         {
+            Name = "Orders";
             Field(x => x.OrderID);
             Field(x => x.OrderDate);
+            Field(x => x.CustomerID);
             AddNavigationField(
                 name: "customer",
                 resolve: context => context.Source.Customer);
@@ -96,12 +102,27 @@ namespace GraphQL.Api
             Name = "Query";
             AddQueryField(
                 name: "customers",
-                resolve: context => context.DbContext.Customers
+                //the next line is failing
+                resolve: context => context.DbContext.Customers.Include(x => x.Orders).Select<Customer>(GetSelect(context.SubFields))                
             );
             AddQueryField(
                 name: "orders",
-                resolve: context => context.DbContext.Orders
+                resolve: context => context.DbContext.Orders.Include(x => x.Customer).Select<Order>(GetSelect(context.SubFields))
             );
+        }
+
+        private string GetSelect(IDictionary<string, Field> subfields) => $"new({string.Join(",", GetSelectedColumns(subfields))})";
+
+        private IEnumerable<string> GetSelectedColumns(IDictionary<string, Field> subfields)
+        {
+            foreach (var item in subfields)
+            {
+                if (item.Value.SelectionSet.Children.Count() > 0)
+                {
+                    continue;
+                }
+                yield return item.Key;
+            }
         }
     }
 }
