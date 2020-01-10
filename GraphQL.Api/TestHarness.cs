@@ -1,12 +1,9 @@
-﻿using GraphQL.EntityFramework;
-using GraphQL.Language.AST;
+﻿using GraphQL.EntityFrameworkCore.DynamicLinq.Builders;
+using GraphQL.EntityFrameworkCore.DynamicLinq.Extensions;
 using GraphQL.Types;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Dynamic.Core;
 
 namespace GraphQL.Api
 {
@@ -25,32 +22,26 @@ namespace GraphQL.Api
         public Customer Customer { get; set; }
     }
 
-    public class CustomerGraph : EfObjectGraphType<TestDBContext, Customer>
+    public class CustomerGraph : ObjectGraphType<Customer>
     {
-        public CustomerGraph(IEfGraphQLService<TestDBContext> graphQlService) :
-            base(graphQlService)
+        public CustomerGraph()
         {
-            Name = "Customers";
+            Name = "Customer";
             Field(x => x.CustomerID);
             Field(x => x.CustomerName);
-            AddNavigationListField(
-                name: "orders",
-                resolve: context => context.Source.Orders);
+            Field<ListGraphType<OrderGraph>>("Orders", resolve: context => context.Source.Orders);
         }
     }
 
-    public class OrderGraph : EfObjectGraphType<TestDBContext, Order>
+    public class OrderGraph : ObjectGraphType<Order>
     {
-        public OrderGraph(IEfGraphQLService<TestDBContext> graphQlService) :
-            base(graphQlService)
+        public OrderGraph()
         {
-            Name = "Orders";
+            Name = "Order";
             Field(x => x.OrderID);
             Field(x => x.OrderDate);
             Field(x => x.CustomerID);
-            AddNavigationField(
-                name: "customer",
-                resolve: context => context.Source.Customer);
+            Field<CustomerGraph>("Customer", resolve: context => context.Source.Customer);
         }
     }
 
@@ -59,7 +50,10 @@ namespace GraphQL.Api
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Order> Orders { get; set; }
 
-        public TestDBContext(DbContextOptions<TestDBContext> options) : base(options) { }
+        public TestDBContext(DbContextOptions<TestDBContext> options) : base(options)
+        {
+            ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -74,16 +68,6 @@ namespace GraphQL.Api
                 builder.Entity<Customer>().HasMany(x => x.Orders).WithOne(x => x.Customer);
             }
         }
-
-        static IModel BuildStaticModel()
-        {
-            var builder = new DbContextOptionsBuilder<TestDBContext>();
-            builder.UseSqlServer("Fake");
-            using var dbContext = new TestDBContext(builder.Options);
-            return dbContext.Model;
-        }
-
-        public static IModel StaticModel { get; } = BuildStaticModel();
     }
 
     public class SchemaTest : Schema
@@ -94,35 +78,23 @@ namespace GraphQL.Api
         }
     }
 
-    public class QueryTest : QueryGraphType<TestDBContext>
+    public class QueryTest : ObjectGraphType
     {
-        public QueryTest(IEfGraphQLService<TestDBContext> graphQlService) :
-            base(graphQlService)
+        public QueryTest(TestDBContext dbcontext, IQueryArgumentInfoListBuilder builder)
         {
             Name = "Query";
-            AddQueryField(
-                name: "customers",
-                //the next line is failing
-                resolve: context => context.DbContext.Customers.Include(x => x.Orders).Select<Customer>(GetSelect(context.SubFields))                
-            );
-            AddQueryField(
-                name: "orders",
-                resolve: context => context.DbContext.Orders.Include(x => x.Customer).Select<Order>(GetSelect(context.SubFields))
-            );
-        }
 
-        private string GetSelect(IDictionary<string, Field> subfields) => $"new({string.Join(",", GetSelectedColumns(subfields))})";
+            var customerArguments = builder.Build<CustomerGraph>().SupportOrderBy();
+            Field<ListGraphType<CustomerGraph>>("customers",
+                arguments: customerArguments.ToQueryArguments(),
+                resolve: context => dbcontext.Customers.ApplyQueryArguments(customerArguments, context)
+            );
 
-        private IEnumerable<string> GetSelectedColumns(IDictionary<string, Field> subfields)
-        {
-            foreach (var item in subfields)
-            {
-                if (item.Value.SelectionSet.Children.Count() > 0)
-                {
-                    continue;
-                }
-                yield return item.Key;
-            }
+            var orderArguments = builder.Build<OrderGraph>().SupportOrderBy();
+            Field<ListGraphType<OrderGraph>>("orders",
+                arguments: orderArguments.ToQueryArguments(),
+                resolve: context => dbcontext.Orders.Include(x => x.Customer).ApplyQueryArguments(orderArguments, context)
+            );
         }
     }
 }

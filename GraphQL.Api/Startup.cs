@@ -1,7 +1,7 @@
-using GraphQL.EntityFramework;
+using GraphQL.EntityFrameworkCore.DynamicLinq.DependencyInjection;
+using GraphQL.EntityFrameworkCore.DynamicLinq.Options;
 using GraphQL.Server;
 using GraphQL.Server.Ui.Playground;
-using GraphQL.Utilities;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -24,7 +24,8 @@ namespace GraphQL.Api
         public void ConfigureServices(IServiceCollection services)
         {
             services.Configure<KestrelServerOptions>(o => { o.AllowSynchronousIO = true; });
-            services.Configure<IISServerOptions>(o => { o.AllowSynchronousIO = true; });
+            services.Configure<IISServerOptions>(o => { o.AllowSynchronousIO = true; });           
+            services.AddDbContext<TestDBContext>(options => options.UseSqlServer(_Configuration.GetConnectionString("LeaseWebDB")));
             RegisterGraphQL(services);
         }
 
@@ -50,23 +51,16 @@ namespace GraphQL.Api
 
         private void RegisterGraphQL(IServiceCollection services)
         {
-            services.AddSingleton<IDependencyResolver>(provider => new FuncDependencyResolver(provider.GetRequiredService));
-            GraphTypeTypeRegistry.Register<Customer, CustomerGraph>();
-            GraphTypeTypeRegistry.Register<Order, OrderGraph>();
-            services.AddDbContext<TestDBContext>(options => options.UseSqlServer(_Configuration.GetConnectionString("LeaseWebDB")));
-            EfGraphQLConventions.RegisterInContainer<TestDBContext>(
-                services,
-                model: TestDBContext.StaticModel
-            ); ;
-            EfGraphQLConventions.RegisterConnectionTypesInContainer(services);
-            services.AddSingleton<IDocumentExecuter, EfDocumentExecuter>();
-            services.AddTransient<QueryTest>();
-            services.AddTransient<SchemaTest>();
+            services.AddScoped<IDependencyResolver>(provider => new FuncDependencyResolver(provider.GetRequiredService));
+            services.Configure<QueryArgumentInfoListBuilderOptions>(_Configuration.GetSection("QueryArgumentInfoListBuilderOptions"));          
+            services.AddScoped<SchemaTest>();
             services.AddGraphQL(o =>
             {
                 o.EnableMetrics = true;
                 o.ExposeExceptions = true;
-            }).AddGraphTypes(ServiceLifetime.Transient);
+            })
+                .AddGraphTypes(ServiceLifetime.Scoped);
+            services.AddGraphQLEntityFrameworkCoreDynamicLinq();
         }
     }
 }
