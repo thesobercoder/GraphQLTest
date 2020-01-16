@@ -25,7 +25,7 @@ namespace GraphQL.Api
         {
             services.Configure<KestrelServerOptions>(o => { o.AllowSynchronousIO = true; });
             services.Configure<IISServerOptions>(o => { o.AllowSynchronousIO = true; });           
-            services.AddDbContext<TestDBContext>(options => options.UseSqlServer(_Configuration.GetConnectionString("LeaseWebDB")));
+            services.AddDbContext<TestDBContext>(options => options.UseSqlServer(_Configuration.GetConnectionString("GraphTest")));
             RegisterGraphQL(services);
         }
 
