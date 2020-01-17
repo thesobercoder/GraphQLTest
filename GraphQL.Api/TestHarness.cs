@@ -20,6 +20,7 @@ namespace GraphQL.Api
         public DateTime OrderDate { get; set; }
         public int CustomerID { get; set; }
         public Customer Customer { get; set; }
+        public string Comments { get; set; }
     }
 
     public class CustomerGraph : ObjectGraphType<Customer>
@@ -41,6 +42,7 @@ namespace GraphQL.Api
             Field(x => x.OrderID);
             Field(x => x.OrderDate);
             Field(x => x.CustomerID);
+            Field(x => x.Comments);
             Field<CustomerGraph>("Customer", resolve: context => context.Source.Customer);
         }
     }
